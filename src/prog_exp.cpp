@@ -6,32 +6,23 @@ int avl_rotations = 0;
 int vp_rotations = 0;
 
 typedef struct int_cell int_cell_t;
-typedef struct int_queue int_queue_t;
 
 typedef struct node_cell node_cell_t;
 typedef struct node_queue node_queue_t;
 
-typedef struct int_queue int_queue_t;
-
-struct int_cell
-{
-    int element;
-    int_cell_t *next;
-};
-
-struct int_queue
-{
-    int_cell_t *first, *last;
-    unsigned int size;
-};
-
 typedef int tree_element_t;
 typedef struct node node_t;
+
+enum NodeColor
+{
+    BLACK_NODE,
+    RED_NODE
+};
 struct node
 {
-    node_t *left, *right;
+    node_t *left, *right, *parent;
     tree_element_t element;
-    int height;
+    NodeColor color;
 };
 
 struct node_cell
@@ -63,52 +54,9 @@ node_queue_t *newQueue()
     return queue;
 }
 
-bool isEmptyIntQueue(int_queue_t *queue)
+bool isEmpty(node_queue_t *queue)
 {
     return queue->size == 0;
-}
-
-bool isEmptyNodeQueue(node_queue_t *queue)
-{
-    return queue->size == 0;
-}
-
-int dequeueInt(int_queue_t *queue)
-{
-    if (isEmptyIntQueue(queue))
-        return -1;
-
-    int_cell_t *firstCell = queue->first;
-    int firstElement = queue->first->element;
-
-    queue->first = firstCell->next;
-    queue->size--;
-
-    if (isEmptyIntQueue(queue))
-    {
-        queue->first = NULL;
-        queue->last = NULL;
-    }
-
-    free(firstCell);
-
-    return firstElement;
-}
-
-int_cell_t *newIntCell()
-{
-    int_cell_t *cell = (int_cell_t *)malloc(sizeof(int_cell_t));
-
-    if (!cell)
-    {
-        perror("Error: Cannot allocate cell");
-        exit(-1);
-    }
-
-    cell->next = NULL;
-    cell->element = -1;
-
-    return cell;
 }
 
 node_cell_t *newNodeCell()
@@ -127,9 +75,9 @@ node_cell_t *newNodeCell()
     return cell;
 }
 
-node_t *dequeueNode(node_queue_t *queue)
+node_t *dequeue(node_queue_t *queue)
 {
-    if (isEmptyNodeQueue(queue))
+    if (isEmpty(queue))
         return NULL;
 
     node_cell_t *firstCell = queue->first;
@@ -138,7 +86,7 @@ node_t *dequeueNode(node_queue_t *queue)
     queue->first = firstCell->next;
     queue->size--;
 
-    if (isEmptyNodeQueue(queue))
+    if (isEmpty(queue))
     {
         queue->first = NULL;
         queue->last = NULL;
@@ -153,21 +101,7 @@ void enqueue(node_t *element, node_queue_t *queue)
 {
     node_cell_t *cell = newNodeCell();
 
-    if (isEmptyNodeQueue(queue))
-        queue->first = cell;
-    else
-        queue->last->next = cell;
-
-    queue->last = cell;
-    queue->size++;
-    cell->element = element;
-}
-
-void enqueue(int element, int_queue_t *queue)
-{
-    int_cell_t *cell = newIntCell();
-
-    if (isEmptyIntQueue(queue))
+    if (isEmpty(queue))
         queue->first = cell;
     else
         queue->last->next = cell;
@@ -220,10 +154,11 @@ node_t *rotateRight(node_t *x)
     node_t *y = x->left;
 
     x->left = y->right;
-    y->right = x;
+    y->right->parent = x;
 
-    x->height = 1 + max(height(x->left), height(x->right));
-    y->height = 1 + max(height(y->left), height(y->right));
+    y->right = x;
+    y->parent = x->parent;
+    x->parent = y;
 
     return y;
 }
@@ -233,10 +168,11 @@ node_t *rotateLeft(node_t *x)
     node_t *y = x->right;
 
     x->right = y->left;
-    y->left = x;
+    y->left->parent = x;
 
-    x->height = 1 + max(height(x->left), height(x->right));
-    y->height = 1 + max(height(y->left), height(y->right));
+    y->left = x;
+    y->parent = x->parent;
+    x->parent = y;
 
     return y;
 }
@@ -246,8 +182,6 @@ node_t *avl_rebalance(node_t *root)
     int leftHeight = height(root->left);
     int rightHeight = height(root->right);
     int balanceFactor = leftHeight - rightHeight;
-
-    root->height = 1 + max(leftHeight, rightHeight);
 
     if (balanceFactor > 1)
     {
@@ -282,6 +216,153 @@ node_t *avl_insert(tree_element_t element, node_t *root)
     return avl_rebalance(root);
 }
 
+node_t *getUncle(node_t *node)
+{
+    node_t *parent = node->parent;
+    node_t *grandparent = node->parent->parent;
+
+    if (grandparent->left == parent)
+        return grandparent->right;
+
+    return grandparent->left;
+}
+
+void vp_recolor_node(node_t *node)
+{
+    if (node->color == BLACK_NODE)
+        node->color = RED_NODE;
+    else
+        node->color = BLACK_NODE;
+}
+
+node_t *vp_rebalance(node_t *root, node_t *insertedNode)
+{
+    node_queue_t *nodeQueue = newQueue();
+    enqueue(insertedNode, nodeQueue);
+
+    node_t *z;
+    while (!isEmpty(nodeQueue))
+    {
+        z = dequeue(nodeQueue);
+
+        // CASE 0
+        if (!z->parent)
+            continue;
+
+        // NO VIOLATION
+        if (z->parent->color == BLACK_NODE || !z->parent->parent)
+            continue;
+
+        node_t *uncle = getUncle(z);
+
+        bool rightTriangle = z->parent->left == z && z->parent->parent->right == z->parent;
+        bool leftTriangle = z->parent->right == z && z->parent->parent->left == z->parent;
+        bool isTriangle = leftTriangle || rightTriangle;
+
+        // CASE 1
+        if (uncle && uncle->color == RED_NODE)
+        {
+            vp_recolor_node(z->parent);
+            enqueue(z->parent, nodeQueue);
+
+            vp_recolor_node(uncle);
+            enqueue(uncle, nodeQueue);
+
+            vp_recolor_node(z->parent->parent);
+            enqueue(z->parent->parent, nodeQueue);
+        }
+        else
+        {
+            // CASE 2
+            if (isTriangle)
+            {
+                if (rightTriangle)
+                {
+                    rotateRight(z->parent);
+                    vp_rotations++;
+                    z = z->right;
+                }
+                else
+                {
+                    rotateLeft(z->parent);
+                    vp_rotations++;
+                    z = z->left;
+                }
+            }
+
+            // CASE 3
+            node_t *originalParent = z->parent, *originalGrandparent = z->parent->parent;
+            bool isLeftLine = z->parent->left == z && z->parent->parent->left == z->parent;
+
+            if (isLeftLine)
+            {
+                rotateRight(z->parent->parent);
+                vp_rotations++;
+            }
+            else
+            {
+                rotateLeft(z->parent->parent);
+                vp_rotations++;
+            }
+
+            vp_recolor_node(originalParent);
+            vp_recolor_node(originalGrandparent);
+        }
+    }
+
+    root->color = BLACK_NODE;
+
+    return root;
+}
+
+node_t *vp_insert(tree_element_t element, node_t *root)
+{
+    if (root == NULL)
+    {
+        root = newNode(element);
+        root->color = BLACK_NODE;
+        return root;
+    }
+
+    node_t *cursor = root;
+    node_t *lastVisitedNode;
+
+    while (cursor)
+    {
+        lastVisitedNode = cursor;
+
+        if (element > cursor->element)
+        {
+            if (cursor->right)
+            {
+                cursor = cursor->right;
+            }
+            else
+            {
+                cursor->right = newNode(element);
+                cursor->right->color = RED_NODE;
+                cursor->left->parent = cursor;
+            }
+        }
+        else if (element < cursor->element)
+        {
+            if (cursor->left)
+            {
+
+                cursor = cursor->left;
+            }
+            else
+            {
+                cursor->left = newNode(element);
+                cursor->left->color = RED_NODE;
+                cursor->left->parent = cursor;
+            }
+        }
+    }
+
+    return vp_rebalance(root);
+}
+
 int balanceFactor(node_t *node)
 {
     return height(node->left) - height(node->right);
@@ -295,9 +376,9 @@ float balanceLevel(node_t *root)
     float factorSum = 0;
     int nodeCount = 0;
 
-    while (!isEmptyNodeQueue(queue))
+    while (!isEmpty(queue))
     {
-        node_t *node = dequeueNode(queue);
+        node_t *node = dequeue(queue);
 
         if (node->left)
             enqueue(node->left, queue);
