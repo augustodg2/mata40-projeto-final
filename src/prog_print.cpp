@@ -98,6 +98,7 @@ node_t *newNode(int element)
 
     node->left = NULL;
     node->right = NULL;
+    node->parent = NULL;
     node->element = element;
 
     return node;
@@ -108,7 +109,8 @@ node_t *rotateRight(node_t *x)
     node_t *y = x->left;
 
     x->left = y->right;
-    y->right->parent = x;
+    if (y->right)
+        y->right->parent = x;
 
     y->right = x;
     y->parent = x->parent;
@@ -122,7 +124,9 @@ node_t *rotateLeft(node_t *x)
     node_t *y = x->right;
 
     x->right = y->left;
-    y->left->parent = x;
+
+    if (y->left)
+        y->left->parent = x;
 
     y->left = x;
     y->parent = x->parent;
@@ -172,6 +176,40 @@ node_t *dequeue(node_queue_t *queue)
     return firstElement;
 }
 
+void printTree(node_t *root)
+{
+    node_queue_t *level = newQueue();
+    enqueue(root, level);
+
+    while (!isEmpty(level))
+    {
+        node_queue_t *nextLevel = newQueue();
+
+        node_t *node = dequeue(level);
+
+        while (node)
+        {
+            printf("%d ", node->element);
+
+            if (node->left)
+            {
+                enqueue(node->left, nextLevel);
+                printf("l ");
+            }
+            if (node->right)
+            {
+                enqueue(node->right, nextLevel);
+                printf("r ");
+            }
+            node = dequeue(level);
+        }
+
+        printf("\n");
+
+        level = nextLevel;
+    }
+}
+
 node_t *vp_rebalance(node_t *root, node_t *insertedNode)
 {
     node_queue_t *nodeQueue = newQueue();
@@ -187,7 +225,7 @@ node_t *vp_rebalance(node_t *root, node_t *insertedNode)
             continue;
 
         // NO VIOLATION
-        if (z->parent->color == BLACK_NODE || !z->parent->parent)
+        if (z->color == BLACK_NODE || z->parent->color == BLACK_NODE || !(z->parent->parent))
             continue;
 
         node_t *uncle = getUncle(z);
@@ -200,13 +238,11 @@ node_t *vp_rebalance(node_t *root, node_t *insertedNode)
         if (uncle && uncle->color == RED_NODE)
         {
             vp_recolor_node(z->parent);
-            enqueue(z->parent, nodeQueue);
-
             vp_recolor_node(uncle);
-            enqueue(uncle, nodeQueue);
-
             vp_recolor_node(z->parent->parent);
-            enqueue(z->parent->parent, nodeQueue);
+
+            if (z->parent->parent->color == RED_NODE)
+                enqueue(z->parent->parent, nodeQueue);
         }
         else
         {
@@ -215,13 +251,13 @@ node_t *vp_rebalance(node_t *root, node_t *insertedNode)
             {
                 if (rightTriangle)
                 {
-                    rotateRight(z->parent);
+                    z->parent->parent->right = rotateRight(z->parent);
                     vp_rotations++;
                     z = z->right;
                 }
                 else
                 {
-                    rotateLeft(z->parent);
+                    z->parent->parent->left = rotateLeft(z->parent);
                     vp_rotations++;
                     z = z->left;
                 }
@@ -233,12 +269,23 @@ node_t *vp_rebalance(node_t *root, node_t *insertedNode)
 
             if (isLeftLine)
             {
-                rotateRight(z->parent->parent);
+                if (root == z->parent->parent)
+                    root = rotateRight(z->parent->parent);
+                else if (z->parent->parent->parent->right == z->parent->parent)
+                    z->parent->parent->parent->right = rotateRight(z->parent->parent);
+                else
+                    z->parent->parent->parent->left = rotateRight(z->parent->parent);
+
                 vp_rotations++;
             }
             else
             {
-                rotateLeft(z->parent->parent);
+                if (root == z->parent->parent)
+                    root = rotateLeft(z->parent->parent);
+                else if (z->parent->parent->parent->right == z->parent->parent)
+                    z->parent->parent->parent->right = rotateLeft(z->parent->parent);
+                else
+                    z->parent->parent->parent->left = rotateLeft(z->parent->parent);
                 vp_rotations++;
             }
 
@@ -302,10 +349,12 @@ node_t *vp_insert(tree_element_t element, node_t *root)
 int main()
 {
     int n;
-    node_t *root;
+    node_t *root = NULL;
 
     while (cin >> n)
     {
-        printTree(root);
+        root = vp_insert(n, root);
     }
+
+    printTree(root);
 }

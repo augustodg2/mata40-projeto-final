@@ -123,6 +123,7 @@ node_t *newNode(int element)
 
     node->left = NULL;
     node->right = NULL;
+    node->parent = NULL;
     node->element = element;
 
     return node;
@@ -154,7 +155,8 @@ node_t *rotateRight(node_t *x)
     node_t *y = x->left;
 
     x->left = y->right;
-    y->right->parent = x;
+    if (y->right)
+        y->right->parent = x;
 
     y->right = x;
     y->parent = x->parent;
@@ -168,7 +170,9 @@ node_t *rotateLeft(node_t *x)
     node_t *y = x->right;
 
     x->right = y->left;
-    y->left->parent = x;
+
+    if (y->left)
+        y->left->parent = x;
 
     y->left = x;
     y->parent = x->parent;
@@ -250,7 +254,7 @@ node_t *vp_rebalance(node_t *root, node_t *insertedNode)
             continue;
 
         // NO VIOLATION
-        if (z->parent->color == BLACK_NODE || !z->parent->parent)
+        if (z->color == BLACK_NODE || z->parent->color == BLACK_NODE || !(z->parent->parent))
             continue;
 
         node_t *uncle = getUncle(z);
@@ -263,13 +267,11 @@ node_t *vp_rebalance(node_t *root, node_t *insertedNode)
         if (uncle && uncle->color == RED_NODE)
         {
             vp_recolor_node(z->parent);
-            enqueue(z->parent, nodeQueue);
-
             vp_recolor_node(uncle);
-            enqueue(uncle, nodeQueue);
-
             vp_recolor_node(z->parent->parent);
-            enqueue(z->parent->parent, nodeQueue);
+
+            if (z->parent->parent->color == RED_NODE)
+                enqueue(z->parent->parent, nodeQueue);
         }
         else
         {
@@ -278,13 +280,13 @@ node_t *vp_rebalance(node_t *root, node_t *insertedNode)
             {
                 if (rightTriangle)
                 {
-                    rotateRight(z->parent);
+                    z->parent->parent->right = rotateRight(z->parent);
                     vp_rotations++;
                     z = z->right;
                 }
                 else
                 {
-                    rotateLeft(z->parent);
+                    z->parent->parent->left = rotateLeft(z->parent);
                     vp_rotations++;
                     z = z->left;
                 }
@@ -296,12 +298,23 @@ node_t *vp_rebalance(node_t *root, node_t *insertedNode)
 
             if (isLeftLine)
             {
-                rotateRight(z->parent->parent);
+                if (root == z->parent->parent)
+                    root = rotateRight(z->parent->parent);
+                else if (z->parent->parent->parent->right == z->parent->parent)
+                    z->parent->parent->parent->right = rotateRight(z->parent->parent);
+                else
+                    z->parent->parent->parent->left = rotateRight(z->parent->parent);
+
                 vp_rotations++;
             }
             else
             {
-                rotateLeft(z->parent->parent);
+                if (root == z->parent->parent)
+                    root = rotateLeft(z->parent->parent);
+                else if (z->parent->parent->parent->right == z->parent->parent)
+                    z->parent->parent->parent->right = rotateLeft(z->parent->parent);
+                else
+                    z->parent->parent->parent->left = rotateLeft(z->parent->parent);
                 vp_rotations++;
             }
 
@@ -325,12 +338,12 @@ node_t *vp_insert(tree_element_t element, node_t *root)
     }
 
     node_t *cursor = root;
-    node_t *lastVisitedNode;
+
+    node_t *insertedNode = newNode(element);
+    insertedNode->color = RED_NODE;
 
     while (cursor)
     {
-        lastVisitedNode = cursor;
-
         if (element > cursor->element)
         {
             if (cursor->right)
@@ -339,28 +352,27 @@ node_t *vp_insert(tree_element_t element, node_t *root)
             }
             else
             {
-                cursor->right = newNode(element);
-                cursor->right->color = RED_NODE;
-                cursor->left->parent = cursor;
+                cursor->right = insertedNode;
+                insertedNode->parent = cursor;
+                break;
             }
         }
         else if (element < cursor->element)
         {
             if (cursor->left)
             {
-
                 cursor = cursor->left;
             }
             else
             {
-                cursor->left = newNode(element);
-                cursor->left->color = RED_NODE;
-                cursor->left->parent = cursor;
+                cursor->left = insertedNode;
+                insertedNode->parent = cursor;
+                break;
             }
         }
     }
 
-    return vp_rebalance(root);
+    return vp_rebalance(root, insertedNode);
 }
 
 int balanceFactor(node_t *node)
@@ -397,17 +409,24 @@ int main()
     int x;
 
     node_t *avl_root = NULL;
+    node_t *vp_root = NULL;
 
     int insertionCount = 0;
     while (cin >> x)
     {
         insertionCount++;
         avl_root = avl_insert(x, avl_root);
+        vp_root = vp_insert(x, vp_root);
     }
 
     printf("DONE: insertionCount: %d\n\n", insertionCount);
-
+    printf("-----------------");
     printf("AVL Tree:\n");
     printf("balance level: %f\n", balanceLevel(avl_root));
     printf("avg rotations: %f\n", (float)avl_rotations / insertionCount);
+    printf("-----------------");
+    printf("Red-Black Tree:\n");
+    printf("balance level: %f\n", balanceLevel(vp_root));
+    printf("avg rotations: %f\n", (float)vp_rotations / insertionCount);
+    printf("-----------------");
 }
