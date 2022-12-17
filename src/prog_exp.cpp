@@ -419,14 +419,14 @@ int main()
         vp_root = vp_insert(x, vp_root);
     }
 
-    printf("DONE: insertionCount: %d\n\n", insertionCount);
-    printf("-----------------");
+    printf("DONE: insertionCount: %d\n", insertionCount);
+    printf("-----------------\n");
     printf("AVL Tree:\n");
     printf("balance level: %f\n", balanceLevel(avl_root));
     printf("avg rotations: %f\n", (float)avl_rotations / insertionCount);
-    printf("-----------------");
+    printf("-----------------\n");
     printf("Red-Black Tree:\n");
     printf("balance level: %f\n", balanceLevel(vp_root));
     printf("avg rotations: %f\n", (float)vp_rotations / insertionCount);
-    printf("-----------------");
+    printf("-----------------\n");
 }
